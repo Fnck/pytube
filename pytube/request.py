@@ -42,6 +42,9 @@ def _execute_request(
         elif method == 'POST':
             return session.post(url, headers=headers, proxies=get_proxy(), data=data,
                                timeout=timeout)  # nosec
+        elif method == "HEAD":
+            return session.head(url, headers=headers, proxies=get_proxy(),
+                               timeout=timeout)  # nosec
     else:
         raise ValueError("Invalid URL")
 
