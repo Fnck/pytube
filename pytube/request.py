@@ -4,13 +4,19 @@ import json
 import logging
 import re
 import socket
+
 from functools import lru_cache
+import requests
+session = requests.Session()
+session.trust_env = False
+session.verify = False
+requests.packages.urllib3.disable_warnings()
+
 from urllib import parse
 from urllib.error import URLError
-from urllib.request import Request, urlopen
-
 from pytube.exceptions import RegexMatchError, MaxRetriesExceeded
 from pytube.helpers import regex_search
+from pytube.helpers import get_proxy
 
 logger = logging.getLogger(__name__)
 default_range_size = 9437184  # 9MB
@@ -31,10 +37,14 @@ def _execute_request(
         if not isinstance(data, bytes):
             data = bytes(json.dumps(data), encoding="utf-8")
     if url.lower().startswith("http"):
-        request = Request(url, headers=base_headers, method=method, data=data)
+        if method == 'GET' or method is None:
+            return session.get(url, headers=headers, proxies=get_proxy(), timeout=timeout)  # nosec
+        elif method == 'POST':
+            return session.post(url, headers=headers, proxies=get_proxy(), data=data,
+                               timeout=timeout)  # nosec
     else:
         raise ValueError("Invalid URL")
-    return urlopen(request, timeout=timeout)  # nosec
+
 
 
 def get(url, extra_headers=None, timeout=socket._GLOBAL_DEFAULT_TIMEOUT):
@@ -51,7 +61,7 @@ def get(url, extra_headers=None, timeout=socket._GLOBAL_DEFAULT_TIMEOUT):
     if extra_headers is None:
         extra_headers = {}
     response = _execute_request(url, headers=extra_headers, timeout=timeout)
-    return response.read().decode("utf-8")
+    return response.content.decode("utf-8")
 
 
 def post(url, extra_headers=None, data=None, timeout=socket._GLOBAL_DEFAULT_TIMEOUT):
@@ -82,7 +92,7 @@ def post(url, extra_headers=None, data=None, timeout=socket._GLOBAL_DEFAULT_TIME
         data=data,
         timeout=timeout
     )
-    return response.read().decode("utf-8")
+    return response.text.decode("utf-8")
 
 
 def seq_stream(
@@ -181,12 +191,12 @@ def stream(
                     method="GET",
                     timeout=timeout
                 )
-                content_range = resp.info()["Content-Length"]
+                content_range = resp.headers["Content-Length"]
                 file_size = int(content_range)
             except (KeyError, IndexError, ValueError) as e:
                 logger.error(e)
         while True:
-            chunk = response.read()
+            chunk = response.content
             if not chunk:
                 break
             downloaded += len(chunk)
@@ -225,7 +235,7 @@ def seq_filesize(url):
         url, method="GET"
     )
 
-    response_value = response.read()
+    response_value = response.content
     # The file header must be added to the total filesize
     total_filesize += len(response_value)
 
@@ -265,5 +275,5 @@ def head(url):
     :returns:
         dictionary of lowercase headers
     """
-    response_headers = _execute_request(url, method="HEAD").info()
+    response_headers = _execute_request(url, method="HEAD").headers
     return {k.lower(): v for k, v in response_headers.items()}

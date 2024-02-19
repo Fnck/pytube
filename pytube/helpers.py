@@ -256,10 +256,11 @@ def target_directory(output_path: Optional[str] = None) -> str:
 
 
 def install_proxy(proxy_handler: Dict[str, str]) -> None:
-    proxy_support = request.ProxyHandler(proxy_handler)
-    opener = request.build_opener(proxy_support)
-    request.install_opener(opener)
+    global proxy_map
+    proxy_map = proxy_handler
 
+def get_proxy():
+    return proxy_map
 
 def uniqueify(duped_list: List) -> List:
     """Remove duplicate items from a list, while maintaining list order.
